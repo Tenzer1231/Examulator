@@ -12,7 +12,6 @@ class Student(db.Model, UserMixin):
     student_id = db.Column(db.String(50), unique=True, nullable=False)
 
     def get_id(self):
-        # Возвращаем id с префиксом "student-"
         return f"student-{self.id}"
 
     def __repr__(self):
@@ -26,7 +25,6 @@ class Teacher(db.Model, UserMixin):
     password = db.Column(db.String(255), nullable=False)
 
     def get_id(self):
-        # Возвращаем id с префиксом "teacher-"
         return f"teacher-{self.id}"
 
     def __repr__(self):
@@ -60,6 +58,7 @@ class TestOption(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     test_id = db.Column(db.Integer, db.ForeignKey('test.id'), nullable=False)
     option_text = db.Column(db.String(255), nullable=False)
+    is_correct = db.Column(db.Boolean, default=False)  # Флаг правильности варианта
 
     def __repr__(self):
         return f'<TestOption {self.option_text}>'
@@ -69,7 +68,7 @@ class TestAssignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     test_id = db.Column(db.Integer, db.ForeignKey('test.id'), nullable=False)
     student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
-    status = db.Column(db.String(20), default='not_taken')  # Возможные значения: not_taken, taken
+    status = db.Column(db.String(20), default='not_taken')  # not_taken или taken
 
     def __repr__(self):
         return f'<TestAssignment Test: {self.test_id}, Student: {self.student_id}>'
@@ -82,8 +81,10 @@ class TestResult(db.Model):
     # Если тест проходит с вариантами, сохраняется выбранный вариант; иначе – текстовый ответ
     selected_option_id = db.Column(db.Integer, db.ForeignKey('test_option.id'), nullable=True)
     answer_text = db.Column(db.Text)  # Текстовый ответ (если нет вариантов)
+    # Новое поле для хранения пути к загруженному файлу
+    file_path = db.Column(db.String(255))
     submission_date = db.Column(db.DateTime, default=datetime.utcnow)
-    grade = db.Column(db.Integer)
+    grade = db.Column(db.Integer)  # 100, если правильно, 0, если неправильно (автоматически)
     comments = db.Column(db.Text)
 
     def __repr__(self):

@@ -14,10 +14,6 @@ from app.models import Student, Teacher, Subject, Test, TestOption
 app = create_app()
 
 with app.app_context():
-    # Если нужно, можно удалить все существующие данные (раскомментируйте следующие строки)
-    # db.drop_all()
-    # db.create_all()
-
     # Создаю таблицы, если они ещё не созданы
     db.create_all()
 
@@ -48,9 +44,9 @@ with app.app_context():
     db.session.commit()
 
     # Добавляю варианты ответов для теста
-    option1 = TestOption(test_id=test1.id, option_text="var a = 10;")
-    option2 = TestOption(test_id=test1.id, option_text="a = 10")
-    option3 = TestOption(test_id=test1.id, option_text="int a = 10;")
+    option1 = TestOption(test_id=test1.id, option_text="var a = 10;", is_correct=False)
+    option2 = TestOption(test_id=test1.id, option_text="a = 10", is_correct=True)
+    option3 = TestOption(test_id=test1.id, option_text="int a = 10;", is_correct=False)
     db.session.add_all([option1, option2, option3])
     db.session.commit()
 

@@ -1,7 +1,9 @@
 # app/views.py
 # -*- coding: utf-8 -*-
-from flask import Blueprint, request, redirect, url_for, flash
+import os
+from flask import Blueprint, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user, login_user, logout_user
+from werkzeug.utils import secure_filename
 from app import db
 from app.models import Student, Teacher, Subject, Test, TestOption, TestAssignment, TestResult
 
@@ -106,7 +108,7 @@ def dashboard():
 # Функционал преподавателя
 #################################
 
-# Создание теста с вариантами ответов
+# Создание теста с вариантами ответов и указанием правильных вариантов
 @bp.route('/teacher/create_test', methods=['GET', 'POST'])
 @login_required
 def create_test():
@@ -120,6 +122,7 @@ def create_test():
         description = request.form.get('description')
         duration = request.form.get('duration')
         options_text = request.form.get('options')  # Варианты, разделённые переносами строк
+        correct_options = request.form.get('correct_options')  # Номера правильных вариантов через запятую
         if not (subject_id and title and duration):
             flash("Заполните обязательные поля: предмет, название теста, продолжительность.")
             return redirect(url_for('main.create_test'))
@@ -131,13 +134,20 @@ def create_test():
         new_test = Test(subject_id=subject_id, title=title, description=description, duration=duration)
         db.session.add(new_test)
         db.session.commit()
-        # Если заданы варианты ответа, добавляю их в базу данных
         if options_text:
             options = options_text.strip().split('\n')
-            for opt in options:
+            correct_indices = []
+            if correct_options:
+                try:
+                    correct_indices = [int(x.strip()) for x in correct_options.split(',') if x.strip().isdigit()]
+                except Exception:
+                    flash("Неправильный формат правильных вариантов.")
+                    return redirect(url_for('main.create_test'))
+            for idx, opt in enumerate(options, start=1):
                 opt = opt.strip()
                 if opt:
-                    test_option = TestOption(test_id=new_test.id, option_text=opt)
+                    is_correct = idx in correct_indices
+                    test_option = TestOption(test_id=new_test.id, option_text=opt, is_correct=is_correct)
                     db.session.add(test_option)
             db.session.commit()
         flash("Тест успешно создан!")
@@ -154,6 +164,8 @@ def create_test():
             Продолжительность (в минутах): <input type="number" name="duration"><br>
             Варианты ответа (по одному варианту в строке):<br>
             <textarea name="options"></textarea><br>
+            Номера правильных вариантов (через запятую, например: 1,3):<br>
+            <input type="text" name="correct_options"><br>
             <input type="submit" value="Создать тест">
         </form>
         <a href="/dashboard">Назад в кабинет</a>
@@ -216,11 +228,13 @@ def test_results():
         student = Student.query.get(res.student_id)
         test = Test.query.get(res.test_id)
         if res.selected_option_id:
-            opt = db.session.query(TestOption).get(res.selected_option_id)
+            opt = TestOption.query.get(res.selected_option_id)
             option_text = f"Выбранный вариант: {opt.option_text}" if opt else ""
         else:
             option_text = f"Ответ: {res.answer_text}"
-        html += f'<div>Студент: {student.full_name}, Тест: {test.title}, {option_text}</div>'
+        file_info = f", Файл: {res.file_path}" if res.file_path else ""
+        grade_text = f", Оценка: {res.grade}" if res.grade is not None else ""
+        html += f'<div>Студент: {student.full_name}, Тест: {test.title}, {option_text}{file_info}{grade_text}</div>'
     html += '<br><a href="/dashboard">Назад в кабинет</a>'
     return html
 
@@ -246,7 +260,7 @@ def student_tests():
     return html
 
 
-# Прохождение теста студентом
+# Прохождение теста студентом с возможностью загрузки файлов
 @bp.route('/student/test/<int:test_id>', methods=['GET', 'POST'])
 @login_required
 def take_test(test_id):
@@ -263,43 +277,69 @@ def take_test(test_id):
     options = TestOption.query.filter_by(test_id=test_id).all()
 
     if request.method == 'POST':
+        # Проверяем, если прикреплён файл
+        uploaded_file = request.files.get('uploaded_file')
+        file_path = None
+        if uploaded_file and uploaded_file.filename != "":
+            from werkzeug.utils import secure_filename
+            filename = secure_filename(uploaded_file.filename)
+            upload_folder = current_app.config.get('UPLOAD_FOLDER')
+            # Создаем папку, если ее нет
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+            file_path = os.path.join(upload_folder, filename)
+            uploaded_file.save(file_path)
+            # Для хранения в базе можно сохранить относительный путь:
+            file_path = filename
+
         if options:
             selected_option = request.form.get('selected_option')
             if not selected_option:
                 flash("Выберите вариант ответа.")
                 return redirect(url_for('main.take_test', test_id=test_id))
-            result = TestResult(test_id=test_id, student_id=current_user.id, selected_option_id=int(selected_option))
+            option = TestOption.query.get(int(selected_option))
+            grade = 100 if option and option.is_correct else 0
+            result = TestResult(
+                test_id=test_id,
+                student_id=current_user.id,
+                selected_option_id=int(selected_option),
+                file_path=file_path,
+                grade=grade
+            )
         else:
             answer = request.form.get('answer')
             if not answer:
                 flash("Введите ваш ответ.")
                 return redirect(url_for('main.take_test', test_id=test_id))
-            result = TestResult(test_id=test_id, student_id=current_user.id, answer_text=answer)
+            result = TestResult(
+                test_id=test_id,
+                student_id=current_user.id,
+                answer_text=answer,
+                file_path=file_path
+            )
         assignment.status = 'taken'
         db.session.add(result)
         db.session.commit()
         flash("Тест отправлен!")
         return redirect(url_for('main.student_tests'))
 
+    # Если тест содержит варианты, показываем их; иначе текстовое поле
     if options:
         options_html = ''.join(
             [f'<input type="radio" name="selected_option" value="{opt.id}">{opt.option_text}<br>' for opt in options])
-        form_html = f'''
-            <h3>{test.title}</h3>
-            <p>{test.description}</p>
-            <form method="post">
-                {options_html}
-                <input type="submit" value="Отправить тест">
-            </form>
-        '''
+        form_fields = options_html
     else:
-        form_html = f'''
-            <h3>{test.title}</h3>
-            <p>{test.description}</p>
-            <form method="post">
-                Ваш ответ: <textarea name="answer"></textarea><br>
-                <input type="submit" value="Отправить тест">
-            </form>
-        '''
+        form_fields = 'Ваш ответ: <textarea name="answer"></textarea><br>'
+
+    # Добавляем поле для загрузки файла (всегда)
+    form_html = f'''
+         <h3>{test.title}</h3>
+         <p>{test.description}</p>
+         <form method="post" enctype="multipart/form-data">
+             {form_fields}
+             Загрузить файл (если требуется): <input type="file" name="uploaded_file"><br>
+             <input type="submit" value="Отправить тест">
+         </form>
+    '''
     form_html += '<br><a href="/student/tests">Назад к тестам</a>'
     return form_html
