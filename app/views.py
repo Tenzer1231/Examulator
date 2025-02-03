@@ -273,25 +273,30 @@ def take_test(test_id):
         flash("Тест не назначен для вас.")
         return redirect(url_for('main.student_tests'))
 
+    # Если тест уже пройден, запретим повторное прохождение
+    if assignment.status == 'taken':
+        flash("Вы уже прошли этот тест.")
+        return redirect(url_for('main.student_tests'))
+
     test = Test.query.get(test_id)
     options = TestOption.query.filter_by(test_id=test_id).all()
 
     if request.method == 'POST':
-        # Проверяем, если прикреплён файл
+        # Обработка загрузки файла
         uploaded_file = request.files.get('uploaded_file')
         file_path = None
         if uploaded_file and uploaded_file.filename != "":
             from werkzeug.utils import secure_filename
             filename = secure_filename(uploaded_file.filename)
             upload_folder = current_app.config.get('UPLOAD_FOLDER')
-            # Создаем папку, если ее нет
             if not os.path.exists(upload_folder):
                 os.makedirs(upload_folder)
             file_path = os.path.join(upload_folder, filename)
             uploaded_file.save(file_path)
-            # Для хранения в базе можно сохранить относительный путь:
+            # Для хранения в базе можно сохранить только имя файла:
             file_path = filename
 
+        # Если тест имеет варианты ответа
         if options:
             selected_option = request.form.get('selected_option')
             if not selected_option:
@@ -307,6 +312,7 @@ def take_test(test_id):
                 grade=grade
             )
         else:
+            # Если вариантов ответа нет — ожидается текстовый ответ
             answer = request.form.get('answer')
             if not answer:
                 flash("Введите ваш ответ.")
@@ -323,23 +329,47 @@ def take_test(test_id):
         flash("Тест отправлен!")
         return redirect(url_for('main.student_tests'))
 
-    # Если тест содержит варианты, показываем их; иначе текстовое поле
+    # Формирование HTML-формы для GET-запроса
     if options:
-        options_html = ''.join(
-            [f'<input type="radio" name="selected_option" value="{opt.id}">{opt.option_text}<br>' for opt in options])
+        options_html = ''.join([f'<input type="radio" name="selected_option" value="{opt.id}">{opt.option_text}<br>' for opt in options])
         form_fields = options_html
     else:
         form_fields = 'Ваш ответ: <textarea name="answer"></textarea><br>'
 
-    # Добавляем поле для загрузки файла (всегда)
+    file_field = 'Загрузить файл (если требуется): <input type="file" name="uploaded_file"><br>'
+
     form_html = f'''
          <h3>{test.title}</h3>
          <p>{test.description}</p>
          <form method="post" enctype="multipart/form-data">
              {form_fields}
-             Загрузить файл (если требуется): <input type="file" name="uploaded_file"><br>
+             {file_field}
              <input type="submit" value="Отправить тест">
          </form>
     '''
+
+    # Добавляем блок таймера, который начнет отсчет после полной загрузки DOM
+    timer_script = f"""
+        <div id="timer" style="font-weight:bold; font-size:20px;"></div>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {{
+                var totalTime = {test.duration} * 60;
+                var timerElement = document.getElementById("timer");
+                var interval = setInterval(function() {{
+                    var minutes = Math.floor(totalTime / 60);
+                    var seconds = totalTime % 60;
+                    timerElement.innerHTML = "Осталось времени: " + minutes + " м " + seconds + " с";
+                    if(totalTime <= 0) {{
+                        clearInterval(interval);
+                        alert("Время истекло!");
+                        document.querySelector("form").submit();
+                    }}
+                    totalTime--;
+                }}, 1000);
+            }});
+        </script>
+    """
+    form_html += timer_script
     form_html += '<br><a href="/student/tests">Назад к тестам</a>'
     return form_html
+
