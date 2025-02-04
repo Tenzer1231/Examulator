@@ -1,14 +1,20 @@
 # app/views.py
 # -*- coding: utf-8 -*-
 import os
-from flask import Blueprint, request, redirect, url_for, flash, current_app
+from datetime import datetime
+from flask import session
+from flask import (
+    Blueprint, request, redirect, url_for, flash, render_template, current_app, send_from_directory
+)
 from flask_login import login_required, current_user, login_user, logout_user
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import Student, Teacher, Subject, Test, TestOption, TestAssignment, TestResult
+from app.models import (
+    Student, Teacher, Subject, Test, TestOption, TestAssignment, TestResult,
+    Question, QuestionOption, QuestionResult
+)
 
 bp = Blueprint('main', __name__)
-
 
 #################################
 # Главная страница и авторизация
@@ -16,8 +22,7 @@ bp = Blueprint('main', __name__)
 
 @bp.route('/')
 def index():
-    return "Привет! Это базовое приложение системы тестирования на Flask."
-
+    return render_template("index.html")
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -43,39 +48,7 @@ def login():
         else:
             flash('Неверные данные')
             return redirect(url_for('main.login'))
-    return '''
-        <h3>Авторизация</h3>
-        <form method="post">
-            <label>Тип пользователя:</label>
-            <select name="user_type" id="user_type">
-                <option value="student">Студент</option>
-                <option value="teacher">Преподаватель</option>
-            </select><br><br>
-            <div id="student_fields">
-                Номер студенческого билета: <input type="text" name="student_id"><br>
-            </div>
-            <div id="teacher_fields" style="display:none;">
-                Логин: <input type="text" name="username"><br>
-                Пароль: <input type="password" name="password"><br>
-            </div>
-            <input type="submit" value="Войти">
-        </form>
-        <script>
-            const select = document.getElementById('user_type');
-            const studentFields = document.getElementById('student_fields');
-            const teacherFields = document.getElementById('teacher_fields');
-            select.addEventListener('change', function() {
-                if (this.value === 'student') {
-                    studentFields.style.display = 'block';
-                    teacherFields.style.display = 'none';
-                } else {
-                    studentFields.style.display = 'none';
-                    teacherFields.style.display = 'block';
-                }
-            });
-        </script>
-    '''
-
+    return render_template("login.html")
 
 @bp.route('/logout')
 @login_required
@@ -84,56 +57,83 @@ def logout():
     flash("Вы вышли из системы")
     return redirect(url_for('main.login'))
 
-
 @bp.route('/dashboard')
 @login_required
 def dashboard():
-    if hasattr(current_user, 'student_id'):
-        return f'''
-            <h3>Личный кабинет студента: {current_user.full_name}</h3>
-            <a href="/student/tests">Просмотреть тесты</a><br>
-            <a href="/logout">Выйти</a>
-        '''
+    if hasattr(current_user, 'username'):
+        tests = Test.query.all()
+        return render_template("dashboard.html", tests=tests)
     else:
-        return f'''
-            <h3>Личный кабинет преподавателя: {current_user.full_name}</h3>
-            <a href="/teacher/create_test">Создать тест</a><br>
-            <a href="/teacher/assign_test">Назначить тест</a><br>
-            <a href="/teacher/test_results">Просмотреть результаты тестов</a><br>
-            <a href="/logout">Выйти</a>
-        '''
-
+        return render_template("dashboard.html")
 
 #################################
 # Функционал преподавателя
 #################################
 
-# Создание теста с вариантами ответов и указанием правильных вариантов
 @bp.route('/teacher/create_test', methods=['GET', 'POST'])
 @login_required
 def create_test():
     if not hasattr(current_user, 'username'):
         flash("Только преподаватели могут создавать тесты.")
         return redirect(url_for('main.index'))
-
     if request.method == 'POST':
         subject_id = request.form.get('subject_id')
         title = request.form.get('title')
         description = request.form.get('description')
         duration = request.form.get('duration')
-        options_text = request.form.get('options')  # Варианты, разделённые переносами строк
-        correct_options = request.form.get('correct_options')  # Номера правильных вариантов через запятую
-        if not (subject_id and title and duration):
-            flash("Заполните обязательные поля: предмет, название теста, продолжительность.")
+        test_type = request.form.get('test_type')
+        if not (subject_id and title and duration and test_type):
+            flash("Заполните обязательные поля: предмет, название теста, продолжительность и режим теста.")
             return redirect(url_for('main.create_test'))
         try:
             duration = int(duration)
         except ValueError:
             flash("Продолжительность должна быть числом.")
             return redirect(url_for('main.create_test'))
-        new_test = Test(subject_id=subject_id, title=title, description=description, duration=duration)
+        new_test = Test(
+            subject_id=subject_id,
+            title=title,
+            description=description,
+            duration=duration,
+            test_type=test_type
+        )
         db.session.add(new_test)
         db.session.commit()
+        flash("Тест успешно создан!")
+        return redirect(url_for('main.add_questions', test_id=new_test.id))
+    subjects = Subject.query.all()
+    return render_template("create_test.html", subjects=subjects)
+
+@bp.route('/teacher/add_questions/<int:test_id>', methods=['GET', 'POST'])
+@login_required
+def add_questions(test_id):
+    if not hasattr(current_user, 'username'):
+        flash("Только преподаватели могут добавлять вопросы.")
+        return redirect(url_for('main.index'))
+    test = Test.query.get(test_id)
+    if not test:
+        flash("Тест не найден.")
+        return redirect(url_for('main.dashboard'))
+    if request.method == 'POST':
+        question_text = request.form.get('question_text')
+        uploaded_file = request.files.get('question_image')
+        image_path = None
+        if uploaded_file and uploaded_file.filename != "":
+            filename = secure_filename(uploaded_file.filename)
+            upload_folder = current_app.config.get('UPLOAD_FOLDER')
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+            image_path = os.path.join(upload_folder, filename)
+            uploaded_file.save(image_path)
+            image_path = filename
+        if not question_text:
+            flash("Введите текст вопроса.")
+            return redirect(url_for('main.add_questions', test_id=test_id))
+        new_question = Question(test_id=test_id, text=question_text, image_path=image_path)
+        db.session.add(new_question)
+        db.session.commit()
+        options_text = request.form.get('options')
+        correct_options = request.form.get('correct_options')
         if options_text:
             options = options_text.strip().split('\n')
             correct_indices = []
@@ -141,129 +141,174 @@ def create_test():
                 try:
                     correct_indices = [int(x.strip()) for x in correct_options.split(',') if x.strip().isdigit()]
                 except Exception:
-                    flash("Неправильный формат правильных вариантов.")
-                    return redirect(url_for('main.create_test'))
+                    flash("Неправильный формат правильных вариантов для вопроса.")
+                    return redirect(url_for('main.add_questions', test_id=test_id))
             for idx, opt in enumerate(options, start=1):
                 opt = opt.strip()
                 if opt:
                     is_correct = idx in correct_indices
-                    test_option = TestOption(test_id=new_test.id, option_text=opt, is_correct=is_correct)
-                    db.session.add(test_option)
+                    q_option = QuestionOption(question_id=new_question.id, option_text=opt, is_correct=is_correct)
+                    db.session.add(q_option)
             db.session.commit()
-        flash("Тест успешно создан!")
-        return redirect(url_for('main.dashboard'))
+        flash("Вопрос добавлен!")
+        return redirect(url_for('main.add_questions', test_id=test_id))
+    questions = test.questions
+    return render_template("add_questions.html", test=test, questions=questions)
 
-    subjects = Subject.query.all()
-    subjects_options = ''.join([f'<option value="{sub.id}">{sub.name}</option>' for sub in subjects])
-    return f'''
-        <h3>Создание теста</h3>
-        <form method="post">
-            Предмет: <select name="subject_id">{subjects_options}</select><br>
-            Название теста: <input type="text" name="title"><br>
-            Описание: <textarea name="description"></textarea><br>
-            Продолжительность (в минутах): <input type="number" name="duration"><br>
-            Варианты ответа (по одному варианту в строке):<br>
-            <textarea name="options"></textarea><br>
-            Номера правильных вариантов (через запятую, например: 1,3):<br>
-            <input type="text" name="correct_options"><br>
-            <input type="submit" value="Создать тест">
-        </form>
-        <a href="/dashboard">Назад в кабинет</a>
-    '''
-
-
-# Назначение теста студенту
 @bp.route('/teacher/assign_test', methods=['GET', 'POST'])
 @login_required
 def assign_test():
     if not hasattr(current_user, 'username'):
         flash("Только преподаватели могут назначать тесты.")
         return redirect(url_for('main.index'))
-
     if request.method == 'POST':
         test_id = request.form.get('test_id')
         student_id = request.form.get('student_id')
         if not (test_id and student_id):
             flash("Выберите тест и студента.")
             return redirect(url_for('main.assign_test'))
-
         existing = TestAssignment.query.filter_by(test_id=test_id, student_id=student_id).first()
         if existing:
             flash("Этот тест уже назначен данному студенту.")
             return redirect(url_for('main.assign_test'))
-
         assignment = TestAssignment(test_id=test_id, student_id=student_id, status='not_taken')
         db.session.add(assignment)
         db.session.commit()
         flash("Тест успешно назначен!")
         return redirect(url_for('main.dashboard'))
-
     tests = Test.query.all()
     students = Student.query.all()
-    tests_options = ''.join([f'<option value="{test.id}">{test.title}</option>' for test in tests])
-    students_options = ''.join([f'<option value="{stu.id}">{stu.full_name}</option>' for stu in students])
-
-    return f'''
-         <h3>Назначение теста студенту</h3>
-         <form method="post">
-             Тест: <select name="test_id">{tests_options}</select><br>
-             Студент: <select name="student_id">{students_options}</select><br>
-             <input type="submit" value="Назначить тест">
-         </form>
-         <a href="/dashboard">Назад в кабинет</a>
-    '''
+    return render_template("assign_test.html", tests=tests, students=students)
 
 
-# Просмотр результатов тестов преподавателем
 @bp.route('/teacher/test_results')
 @login_required
 def test_results():
     if not hasattr(current_user, 'username'):
-        flash("Доступ разрешён только преподавателям.")
+        flash("Доступ разрешён только для преподавателей.")
         return redirect(url_for('main.index'))
+    test_results = TestResult.query.all()
+    multi_results_query = db.session.query(
+        Question.test_id,
+        Test.title.label("test_title"),
+        QuestionResult.student_id,
+        Student.full_name.label("student_name"),
+        db.func.min(QuestionResult.grade).label("overall_grade"),
+        db.func.group_concat(QuestionResult.comments, '; ').label("overall_comment")
+    ).join(Question, Question.id == QuestionResult.question_id
+           ).join(Test, Test.id == Question.test_id
+                  ).join(Student, Student.id == QuestionResult.student_id
+                         ).group_by(Question.test_id, QuestionResult.student_id).all()
 
-    results = TestResult.query.all()
-    html = "<h3>Результаты тестов</h3>"
-    for res in results:
-        student = Student.query.get(res.student_id)
-        test = Test.query.get(res.test_id)
-        if res.selected_option_id:
-            opt = TestOption.query.get(res.selected_option_id)
-            option_text = f"Выбранный вариант: {opt.option_text}" if opt else ""
-        else:
-            option_text = f"Ответ: {res.answer_text}"
-        file_info = f", Файл: {res.file_path}" if res.file_path else ""
-        grade_text = f", Оценка: {res.grade}" if res.grade is not None else ""
-        html += f'<div>Студент: {student.full_name}, Тест: {test.title}, {option_text}{file_info}{grade_text}</div>'
-    html += '<br><a href="/dashboard">Назад в кабинет</a>'
-    return html
+    multi_results = []
+    for r in multi_results_query:
+        multi_results.append({
+            'test_id': r.test_id,
+            'test_title': r.test_title,
+            'student_id': r.student_id,
+            'student_name': r.student_name,
+            'overall_grade': r.overall_grade,
+            'overall_comment': r.overall_comment
+        })
 
+    return render_template("test_results.html", test_results=test_results, multi_results=multi_results)
+
+
+@bp.route('/teacher/grade_result/<int:result_id>', methods=['GET', 'POST'])
+@login_required
+def grade_result(result_id):
+    if not hasattr(current_user, 'username'):
+        flash("Доступ разрешён только для преподавателей.")
+        return redirect(url_for('main.index'))
+    result = TestResult.query.get(result_id)
+    if not result:
+        flash("Результат не найден.")
+        return redirect(url_for('main.test_results'))
+    if request.method == 'POST':
+        new_grade = request.form.get('grade')
+        comment = request.form.get('comment')
+        try:
+            new_grade = int(new_grade)
+        except ValueError:
+            flash("Оценка должна быть числом.")
+            return redirect(url_for('main.grade_result', result_id=result_id))
+        result.grade = new_grade
+        result.comments = comment
+        db.session.commit()
+        flash("Оценка и комментарий сохранены.")
+        return redirect(url_for('main.test_results'))
+    return render_template("grade_result.html", result=result)
 
 #################################
 # Функционал студента
 #################################
 
-# Просмотр списка тестов, назначенных студенту
 @bp.route('/student/tests')
 @login_required
 def student_tests():
     if not hasattr(current_user, 'student_id'):
         flash("Доступ разрешён только для студентов.")
         return redirect(url_for('main.index'))
-
     assignments = TestAssignment.query.filter_by(student_id=current_user.id).all()
-    html = "<h3>Ваши тесты</h3>"
-    for assign in assignments:
-        test = Test.query.get(assign.test_id)
-        html += f'<div><a href="/student/test/{test.id}">{test.title}</a> - Статус: {assign.status}</div>'
-    html += '<br><a href="/dashboard">Назад к кабинету</a>'
-    return html
+    return render_template("student_tests.html", assignments=assignments)
 
-
-# Прохождение теста студентом с возможностью загрузки файлов
-@bp.route('/student/test/<int:test_id>', methods=['GET', 'POST'])
+# Маршрут для прохождения теста в старом режиме (один вопрос)
+@bp.route('/student/take_test/<int:test_id>', methods=['GET', 'POST'])
 @login_required
 def take_test(test_id):
+    if not hasattr(current_user, 'student_id'):
+        flash("Доступ разрешён только для студентов.")
+        return redirect(url_for('main.index'))
+    assignment = TestAssignment.query.filter_by(test_id=test_id, student_id=current_user.id).first()
+    if not assignment:
+        flash("Тест не назначен для вас.")
+        return redirect(url_for('main.student_tests'))
+    if assignment.status == 'taken':
+        flash("Вы уже прошли этот тест.")
+        return redirect(url_for('main.student_tests'))
+    test = Test.query.get(test_id)
+    if test.test_type != 'choice':
+        flash("Этот тест предназначен для режима свободного ответа. Перейдите на многостраничный режим.")
+        return redirect(url_for('main.student_tests'))
+    options = TestOption.query.filter_by(test_id=test_id).all()
+    if request.method == 'POST':
+        uploaded_file = request.files.get('uploaded_file')
+        file_path = None
+        if uploaded_file and uploaded_file.filename != "":
+            filename = secure_filename(uploaded_file.filename)
+            upload_folder = current_app.config.get('UPLOAD_FOLDER')
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+            file_path = os.path.join(upload_folder, filename)
+            uploaded_file.save(file_path)
+            file_path = filename
+        selected_option = request.form.get('selected_option')
+        if not selected_option:
+            flash("Выберите вариант ответа.")
+            return redirect(url_for('main.take_test', test_id=test_id))
+        result = TestResult(
+            test_id=test_id,
+            student_id=current_user.id,
+            selected_option_id=int(selected_option),
+            file_path=file_path,
+            grade=None
+        )
+        assignment.status = 'taken'
+        db.session.add(result)
+        db.session.commit()
+        flash("Тест отправлен! Преподаватель оценит ваш ответ позже.")
+        return redirect(url_for('main.student_tests'))
+    return render_template("take_test.html", test=test, options=options)
+
+@bp.route('/student/take_test_multi/<int:test_id>/start', methods=['GET'])
+@login_required
+def start_test_multi(test_id):
+    session['test_%d_answers' % test_id] = {}
+    return redirect(url_for('main.take_test_multi', test_id=test_id, question_index=0))
+
+@bp.route('/student/take_test_multi/<int:test_id>/<int:question_index>', methods=['GET', 'POST'])
+@login_required
+def take_test_multi(test_id, question_index):
     if not hasattr(current_user, 'student_id'):
         flash("Доступ разрешён только для студентов.")
         return redirect(url_for('main.index'))
@@ -272,104 +317,185 @@ def take_test(test_id):
     if not assignment:
         flash("Тест не назначен для вас.")
         return redirect(url_for('main.student_tests'))
-
-    # Если тест уже пройден, запретим повторное прохождение
     if assignment.status == 'taken':
         flash("Вы уже прошли этот тест.")
         return redirect(url_for('main.student_tests'))
 
     test = Test.query.get(test_id)
-    options = TestOption.query.filter_by(test_id=test_id).all()
+    questions = test.questions
+    total_questions = len(questions)
+    if total_questions == 0:
+        if test.test_type != 'choice':
+            default_question = Question(test_id=test.id, text="Введите ваш ответ:", image_path=None)
+            db.session.add(default_question)
+            db.session.commit()
+            questions = test.questions
+            total_questions = len(questions)
+        else:
+            flash("В тесте нет вопросов.")
+            return redirect(url_for('main.student_tests'))
+    if question_index < 0 or question_index >= total_questions:
+        flash("Неверный номер вопроса.")
+        return redirect(url_for('main.take_test_multi', test_id=test_id, question_index=0))
+
+    if not assignment.start_time:
+        assignment.start_time = datetime.utcnow()
+        db.session.commit()
+    elapsed = (datetime.utcnow() - assignment.start_time).total_seconds()
+    if elapsed > test.duration * 60:
+        flash("Время теста истекло!")
+        assignment.status = 'taken'
+        db.session.commit()
+        return redirect(url_for('main.student_tests'))
+
+    current_question = questions[question_index]
 
     if request.method == 'POST':
-        # Обработка загрузки файла
         uploaded_file = request.files.get('uploaded_file')
         file_path = None
         if uploaded_file and uploaded_file.filename != "":
-            from werkzeug.utils import secure_filename
             filename = secure_filename(uploaded_file.filename)
             upload_folder = current_app.config.get('UPLOAD_FOLDER')
             if not os.path.exists(upload_folder):
                 os.makedirs(upload_folder)
             file_path = os.path.join(upload_folder, filename)
             uploaded_file.save(file_path)
-            # Для хранения в базе можно сохранить только имя файла:
             file_path = filename
 
-        # Если тест имеет варианты ответа
-        if options:
-            selected_option = request.form.get('selected_option')
-            if not selected_option:
-                flash("Выберите вариант ответа.")
-                return redirect(url_for('main.take_test', test_id=test_id))
-            option = TestOption.query.get(int(selected_option))
-            grade = 100 if option and option.is_correct else 0
-            result = TestResult(
-                test_id=test_id,
-                student_id=current_user.id,
-                selected_option_id=int(selected_option),
-                file_path=file_path,
-                grade=grade
-            )
+        if test.test_type == 'choice':
+            if current_question.options and len(current_question.options) > 0:
+                answer = request.form.get('selected_option')
+                if not answer:
+                    flash("Выберите вариант ответа для вопроса " + str(question_index + 1) + ".")
+                    return redirect(url_for('main.take_test_multi', test_id=test_id, question_index=question_index))
+                session['test_%d_answers' % test_id][str(current_question.id)] = {
+                    'selected_option_id': int(answer),
+                    'file_path': file_path
+                }
+            else:
+                flash("Для вопроса " + str(question_index + 1) + " не заданы варианты ответа.")
+                return redirect(url_for('main.student_tests'))
         else:
-            # Если вариантов ответа нет — ожидается текстовый ответ
             answer = request.form.get('answer')
             if not answer:
-                flash("Введите ваш ответ.")
-                return redirect(url_for('main.take_test', test_id=test_id))
-            result = TestResult(
-                test_id=test_id,
-                student_id=current_user.id,
-                answer_text=answer,
-                file_path=file_path
-            )
-        assignment.status = 'taken'
-        db.session.add(result)
+                flash("Введите ваш ответ для вопроса " + str(question_index + 1) + ".")
+                return redirect(url_for('main.take_test_multi', test_id=test_id, question_index=question_index))
+            session['test_%d_answers' % test_id][str(current_question.id)] = {
+                'answer_text': answer,
+                'file_path': file_path
+            }
+        next_index = question_index + 1
+        if next_index < total_questions:
+            return redirect(url_for('main.take_test_multi', test_id=test_id, question_index=next_index))
+        else:
+            answers = session.get('test_%d_answers' % test_id, {})
+            for q in questions:
+                ans = answers.get(str(q.id))
+                if q.options and len(q.options) > 0:
+                    if ans and 'selected_option_id' in ans:
+                        q_result = QuestionResult(
+                            question_id=q.id,
+                            student_id=current_user.id,
+                            selected_option_id=ans['selected_option_id'],
+                            grade=None
+                        )
+                        if 'file_path' in ans:
+                            q_result.file_path = ans['file_path']
+                        db.session.add(q_result)
+                else:
+                    if ans and 'answer_text' in ans:
+                        q_result = QuestionResult(
+                            question_id=q.id,
+                            student_id=current_user.id,
+                            answer_text=ans['answer_text'],
+                            grade=None
+                        )
+                        if 'file_path' in ans:
+                            q_result.file_path = ans['file_path']
+                        db.session.add(q_result)
+            assignment.status = 'taken'
+            db.session.commit()
+            flash("Тест отправлен!")
+            session.pop('test_%d_answers' % test_id, None)
+            return redirect(url_for('main.student_tests'))
+
+    return render_template("take_test_multi.html", test=test, question=current_question,
+                           question_index=question_index, total_questions=total_questions)
+
+@bp.route('/download/<filename>')
+@login_required
+def download_file(filename):
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    return send_from_directory(upload_folder, filename, as_attachment=True)
+
+@bp.route('/student/results')
+@login_required
+def student_results():
+    if not hasattr(current_user, 'student_id'):
+        flash("Доступ разрешён только для студентов.")
+        return redirect(url_for('main.index'))
+    test_results = TestResult.query.filter_by(student_id=current_user.id).all()
+    question_results = QuestionResult.query.filter_by(student_id=current_user.id).all()
+    return render_template("student_results.html", test_results=test_results, question_results=question_results)
+
+@bp.route('/teacher/grade_question/<int:result_id>', methods=['GET', 'POST'])
+@login_required
+def grade_question(result_id):
+    if not hasattr(current_user, 'username'):
+        flash("Доступ разрешён только для преподавателей.")
+        return redirect(url_for('main.index'))
+    q_result = QuestionResult.query.get(result_id)
+    if not q_result:
+        flash("Результат не найден.")
+        return redirect(url_for('main.test_results'))
+    if request.method == 'POST':
+        new_grade = request.form.get('grade')
+        comment = request.form.get('comment')
+        try:
+            new_grade = int(new_grade)
+        except ValueError:
+            flash("Оценка должна быть числом.")
+            return redirect(url_for('main.grade_question', result_id=result_id))
+        q_result.grade = new_grade
+        q_result.comments = comment
         db.session.commit()
-        flash("Тест отправлен!")
-        return redirect(url_for('main.student_tests'))
+        flash("Оценка и комментарий сохранены.")
+        return redirect(url_for('main.test_results'))
+    return render_template("grade_question.html", result=q_result)
 
-    # Формирование HTML-формы для GET-запроса
-    if options:
-        options_html = ''.join([f'<input type="radio" name="selected_option" value="{opt.id}">{opt.option_text}<br>' for opt in options])
-        form_fields = options_html
-    else:
-        form_fields = 'Ваш ответ: <textarea name="answer"></textarea><br>'
 
-    file_field = 'Загрузить файл (если требуется): <input type="file" name="uploaded_file"><br>'
+@bp.route('/teacher/grade_test/<int:test_id>/<int:student_id>', methods=['GET', 'POST'])
+@login_required
+def grade_test(test_id, student_id):
+    if not hasattr(current_user, 'username'):
+        flash("Доступ разрешён только для преподавателей.")
+        return redirect(url_for('main.index'))
 
-    form_html = f'''
-         <h3>{test.title}</h3>
-         <p>{test.description}</p>
-         <form method="post" enctype="multipart/form-data">
-             {form_fields}
-             {file_field}
-             <input type="submit" value="Отправить тест">
-         </form>
-    '''
+    assignment = TestAssignment.query.filter_by(test_id=test_id, student_id=student_id).first()
+    if not assignment or assignment.status != 'taken':
+        flash("Тест ещё не сдан или результаты отсутствуют.")
+        return redirect(url_for('main.test_results'))
 
-    # Добавляем блок таймера, который начнет отсчет после полной загрузки DOM
-    timer_script = f"""
-        <div id="timer" style="font-weight:bold; font-size:20px;"></div>
-        <script>
-            document.addEventListener("DOMContentLoaded", function() {{
-                var totalTime = {test.duration} * 60;
-                var timerElement = document.getElementById("timer");
-                var interval = setInterval(function() {{
-                    var minutes = Math.floor(totalTime / 60);
-                    var seconds = totalTime % 60;
-                    timerElement.innerHTML = "Осталось времени: " + minutes + " м " + seconds + " с";
-                    if(totalTime <= 0) {{
-                        clearInterval(interval);
-                        alert("Время истекло!");
-                        document.querySelector("form").submit();
-                    }}
-                    totalTime--;
-                }}, 1000);
-            }});
-        </script>
-    """
-    form_html += timer_script
-    form_html += '<br><a href="/student/tests">Назад к тестам</a>'
-    return form_html
+    q_results = QuestionResult.query.join(Question).filter(
+        Question.test_id == test_id,
+        QuestionResult.student_id == student_id
+    ).all()
 
+    if request.method == 'POST':
+        overall_grade = request.form.get('overall_grade')
+        overall_comment = request.form.get('overall_comment')
+        try:
+            overall_grade = int(overall_grade)
+        except ValueError:
+            flash("Оценка должна быть числом.")
+            return redirect(url_for('main.grade_test', test_id=test_id, student_id=student_id))
+        for res in q_results:
+            res.grade = overall_grade
+            res.comments = overall_comment
+        db.session.commit()
+        flash("Оценка и комментарии сохранены.")
+        return redirect(url_for('main.test_results'))
+
+    test_obj = Test.query.get(test_id)
+    student_obj = Student.query.get(student_id)
+    return render_template("grade_test.html", test=test_obj, student=student_obj, q_results=q_results)

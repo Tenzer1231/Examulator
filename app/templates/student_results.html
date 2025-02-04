@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Мои результаты{% endblock %}
+{% block content %}
+<h3>Мои результаты</h3>
+
+<h4>Тесты с одним вопросом</h4>
+{% if test_results|length > 0 %}
+  {% for res in test_results %}
+    <div style="border: 1px solid #ccc; padding:5px; margin-bottom:10px;">
+      <strong>Тест:</strong> {{ res.test.title }}<br>
+      <strong>Ответ студента:</strong>
+      {% if res.selected_option %}
+         {{ res.selected_option.option_text }}
+      {% else %}
+         {{ res.answer_text }}
+      {% endif %}
+      <br>
+      {% if res.file_path %}
+         <strong>Файл:</strong> <a href="{{ url_for('main.download_file', filename=res.file_path) }}">{{ res.file_path }}</a><br>
+      {% endif %}
+      {% if res. grade is not none %}
+         <strong>Оценка:</strong> {{ res. grade }}<br>
+      {% else %}
+         <strong>Оценка:</strong> Не оценено<br>
+      {% endif %}
+      {% if res.comments %}
+         <strong>Комментарий:</strong> {{ res.comments }}<br>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <p>Результаты тестов с одним вопросом отсутствуют.</p>
+{% endif %}
+
+<h4>Многостраничные тесты</h4>
+{% if question_results|length > 0 %}
+  {% for res in question_results %}
+    <div style="border: 1px solid #ccc; padding:5px; margin-bottom:10px;">
+      <strong>Тест:</strong> {{ res.question.test.title }}<br>
+      <strong>Вопрос:</strong> {{ res.question.text }}<br>
+      <strong>Ответ студента:</strong>
+      {% if res.selected_option %}
+         {{ res.selected_option.option_text }}
+      {% else %}
+         {{ res.answer_text }}
+      {% endif %}
+      <br>
+      {% if res.file_path %}
+         <strong>Файл:</strong> <a href="{{ url_for('main.download_file', filename=res.file_path) }}">{{ res.file_path }}</a><br>
+      {% endif %}
+      {% if res.grade is not none %}
+         <strong>Оценка:</strong> {{ res. grade }}<br>
+      {% else %}
+         <strong>Оценка:</strong> Не оценено<br>
+      {% endif %}
+      {% if res.comments %}
+         <strong>Комментарий:</strong> {{ res.comments }}<br>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <p>Результаты многостраничных тестов отсутствуют.</p>
+{% endif %}
+
+<a href="{{ url_for('main.dashboard') }}">Назад к кабинету</a>
+{% endblock %}

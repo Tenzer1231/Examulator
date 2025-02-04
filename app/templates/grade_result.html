@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Оценка теста{% endblock %}
+{% block content %}
+<h3>Оценка теста</h3>
+<div>
+    Студент: {{ result.student.full_name }}<br>
+    Тест: {{ result.test.title }}<br>
+    {% if result.selected_option %}
+        Выбранный вариант: {{ result.selected_option.option_text }}<br>
+    {% else %}
+        Ответ: {{ result.answer_text }}<br>
+    {% endif %}
+    {% if result.file_path %}
+        Файл: <a href="{{ url_for('main.download_file', filename=result.file_path) }}">{{ result.file_path }}</a><br>
+    {% endif %}
+</div>
+<form method="post">
+    Оценка: <input type="text" name="grade"><br>
+    Комментарий: <textarea name="comment"></textarea><br>
+    <input type="submit" value="Сохранить">
+</form>
+<a href="{{ url_for('main.test_results') }}">Назад к результатам</a>
+{% endblock %}

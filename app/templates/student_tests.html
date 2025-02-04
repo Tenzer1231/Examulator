@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Ваши тесты{% endblock %}
+{% block content %}
+<h3>Ваши тесты</h3>
+{% for assign in assignments %}
+    <div>
+        {% if assign.test.test_type == 'choice' and assign.test.questions|length == 1 %}
+            <a href="{{ url_for('main.take_test', test_id=assign.test.id) }}">{{ assign.test.title }}</a>
+        {% else %}
+            <a href="{{ url_for('main.start_test_multi', test_id=assign.test.id) }}">{{ assign.test.title }}</a>
+        {% endif %}
+        - Статус: {{ assign.status }}
+    </div>
+{% endfor %}
+<a href="{{ url_for('main.dashboard') }}">Назад к кабинету</a>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Создать тест{% endblock %}
+{% block content %}
+<h3>Создание теста</h3>
+
+<!-- Форма для создания нового теста, если тест еще не создан -->
+{% if test is not defined %}
+<form method="post">
+    <label>Предмет:</label>
+    <select name="subject_id">
+        {% for subject in subjects %}
+            <option value="{{ subject.id }}">{{ subject.name }}</option>
+        {% endfor %}
+    </select><br><br>
+
+    <label>Название теста:</label>
+    <input type="text" name="title"><br><br>
+
+    <label>Описание:</label>
+    <textarea name="description"></textarea><br><br>
+
+    <label>Продолжительность (в минутах):</label>
+    <input type="number" name="duration"><br><br>
+
+    <label>Режим теста:</label>
+    <select name="test_type">
+        <option value="choice">С выбором ответа</option>
+        <option value="free_response">Без выбора ответа (свободный ответ)</option>
+    </select><br><br>
+
+    <!-- Опционально для тестов с выбором ответа (старый режим) -->
+    <label>Варианты ответа (по одному варианту в строке, если требуется):</label><br>
+    <textarea name="options"></textarea><br><br>
+
+    <label>Номера правильных вариантов (через запятую, например: 1,3):</label>
+    <input type="text" name="correct_options"><br><br>
+
+    <input type="submit" value="Создать тест">
+</form>
+{% else %}
+    <p>Тест <strong>{{ test.title }}</strong> успешно создан.</p>
+    <p>
+        <a href="{{ url_for('main.add_questions', test_id=test.id) }}">Добавить вопросы к тесту</a>
+    </p>
+{% endif %}
+
+<hr>
+<h3>Все тесты</h3>
+{% if tests|length > 0 %}
+    <ul>
+        {% for t in tests %}
+            <li>
+                <strong>{{ t.title }}</strong> ({{ t.test_type }})
+                - <a href="{{ url_for('main.add_questions', test_id=t.id) }}">Добавить вопросы</a>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>Тесты еще не созданы.</p>
+{% endif %}
+<a href="{{ url_for('main.dashboard') }}">Назад в кабинет</a>
+{% endblock %}

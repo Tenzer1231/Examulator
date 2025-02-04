@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Прохождение теста{% endblock %}
+{% block content %}
+<h3>{{ test.title }}</h3>
+<p>{{ test.description }}</p>
+
+<form method="post" enctype="multipart/form-data">
+    <div style="margin-bottom:20px; border: 1px solid #ccc; padding:10px;">
+        <strong>Вопрос {{ question_index + 1 }} из {{ total_questions }}:</strong><br>
+        {{ question.text }}<br>
+        {% if question.image_path %}
+            <img src="{{ url_for('main.download_file', filename=question.image_path) }}" alt="Изображение вопроса" style="max-width:300px;"><br>
+        {% endif %}
+        {% if test.test_type == 'choice' %}
+            {% if question.options|length > 0 %}
+                {% for opt in question.options %}
+                    <input type="radio" name="selected_option" value="{{ opt.id }}"> {{ opt.option_text }}<br>
+                {% endfor %}
+            {% else %}
+                <p style="color:red;">Варианты ответа для этого вопроса не заданы.</p>
+            {% endif %}
+        {% else %}
+            Ваш ответ: <textarea name="answer"></textarea><br>
+        {% endif %}
+        Загрузить файл (если требуется): <input type="file" name="uploaded_file"><br>
+    </div>
+    <div>
+        {% if question_index > 0 %}
+            <a href="{{ url_for('main.take_test_multi', test_id=test.id, question_index=question_index - 1) }}">Предыдущий вопрос</a>
+        {% endif %}
+        {% if question_index < total_questions - 1 %}
+            <input type="submit" value="Следующий вопрос">
+        {% else %}
+            <input type="submit" value="Отправить тест">
+        {% endif %}
+    </div>
+</form>
+
+<div id="timer" style="font-weight:bold; font-size:20px;"></div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var totalTime = {{ test.duration }} * 60;
+        var timerElement = document.getElementById("timer");
+        var interval = setInterval(function() {
+            var minutes = Math.floor(totalTime / 60);
+            var seconds = totalTime % 60;
+            timerElement.innerHTML = "Осталось времени: " + minutes + " м " + seconds + " с";
+            if(totalTime <= 0) {
+                clearInterval(interval);
+                alert("Время истекло!");
+                document.querySelector("form").submit();
+            }
+            totalTime--;
+        }, 1000);
+    });
+</script>
+<a href="{{ url_for('main.student_tests') }}">Назад к тестам</a>
+{% endblock %}

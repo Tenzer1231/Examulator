@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Оценка теста{% endblock %}
+{% block content %}
+<h3>Оценка теста: {{ test.title }}</h3>
+<p><strong>Студент:</strong> {{ student.full_name }}</p>
+
+<h4>Ответы студента:</h4>
+{% for res in q_results %}
+  <div style="border: 1px solid #ccc; padding: 5px; margin-bottom: 10px;">
+    <strong>Вопрос:</strong> {{ res.question.text }}<br>
+    {% if res.selected_option %}
+      <strong>Выбранный вариант:</strong> {{ res.selected_option.option_text }}<br>
+    {% else %}
+      <strong>Ответ:</strong> {{ res.answer_text }}<br>
+    {% endif %}
+    {% if res.file_path %}
+      <strong>Файл:</strong> <a href="{{ url_for('main.download_file', filename=res.file_path) }}">{{ res.file_path }}</a><br>
+    {% endif %}
+  </div>
+{% endfor %}
+
+<form method="post">
+    <label>Общая оценка:</label>
+    <input type="text" name="overall_grade" required><br><br>
+    <label>Комментарий:</label><br>
+    <textarea name="overall_comment" rows="4" cols="50"></textarea><br><br>
+    <input type="submit" value="Сохранить оценку">
+</form>
+
+<a href="{{ url_for('main.test_results') }}">Назад к результатам</a>
+{% endblock %}

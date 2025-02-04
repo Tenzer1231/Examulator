@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Личный кабинет{% endblock %}
+{% block content %}
+{% if current_user.is_authenticated and current_user.student_id %}
+    <h3>Личный кабинет студента: {{ current_user.full_name }}</h3>
+    <a href="{{ url_for('main.student_tests') }}">Просмотреть тесты</a><br>
+    <a href="{{ url_for('main.student_results') }}">Мои результаты</a><br>
+    <a href="{{ url_for('main.logout') }}">Выйти</a>
+{% else %}
+    <h3>Личный кабинет преподавателя: {{ current_user.full_name }}</h3>
+    <a href="{{ url_for('main.create_test') }}">Создать тест</a><br>
+    <a href="{{ url_for('main.assign_test') }}">Назначить тест</a><br>
+    <a href="{{ url_for('main.test_results') }}">Просмотреть результаты тестов</a><br>
+    <a href="{{ url_for('main.logout') }}">Выйти</a><br>
+{% endif %}
+{% endblock %}

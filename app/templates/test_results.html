@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Результаты тестов{% endblock %}
+{% block content %}
+<h3>Результаты тестов</h3>
+
+<h4>Тесты с одним вопросом</h4>
+{% if test_results|length > 0 %}
+  {% for res in test_results %}
+    <div>
+      <strong>Тест:</strong> {{ res.test.title }}<br>
+      <strong>Студент:</strong> {{ res.student.full_name }}<br>
+      {% if res.selected_option %}
+         <strong>Выбранный вариант:</strong> {{ res.selected_option.option_text }}<br>
+      {% else %}
+         <strong>Ответ:</strong> {{ res.answer_text }}<br>
+      {% endif %}
+      {% if res.file_path %}
+         <strong>Файл:</strong> <a href="{{ url_for('main.download_file', filename=res.file_path) }}">{{ res.file_path }}</a><br>
+      {% endif %}
+      {% if res. grade is not none %}
+         <strong>Оценка:</strong> {{ res. grade }}<br>
+      {% else %}
+         <strong>Оценка:</strong> Не оценено<br>
+         <a href="{{ url_for('main.grade_result', result_id=res.id) }}">Оценить</a><br>
+      {% endif %}
+      {% if res.comments %}
+         <strong>Комментарий:</strong> {{ res.comments }}<br>
+      {% endif %}
+    </div>
+    <hr>
+  {% endfor %}
+{% else %}
+  <p>Результаты тестов с одним вопросом отсутствуют.</p>
+{% endif %}
+
+<h4>Многостраничные тесты</h4>
+{% if multi_results|length > 0 %}
+  {% for result in multi_results %}
+    <div>
+      <strong>Тест:</strong> {{ result.test_title }}<br>
+      <strong>Студент:</strong> {{ result.student_name }}<br>
+      {% if result.overall_grade is not none %}
+         <strong>Оценка:</strong> {{ result.overall_grade }}<br>
+         <strong>Комментарий:</strong> {{ result.overall_comment }}<br>
+      {% else %}
+         <strong>Оценка:</strong> Не оценено<br>
+         <a href="{{ url_for('main.grade_test', test_id=result.test_id, student_id=result.student_id) }}">Оценить тест</a>
+      {% endif %}
+    </div>
+    <hr>
+  {% endfor %}
+{% else %}
+  <p>Результаты многостраничных тестов отсутствуют.</p>
+{% endif %}
+
+<a href="{{ url_for('main.dashboard') }}">Назад к кабинету</a>
+{% endblock %}

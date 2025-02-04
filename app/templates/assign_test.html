@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Назначить тест{% endblock %}
+{% block content %}
+<h3>Назначение теста студенту</h3>
+<form method="post">
+    Тест: 
+    <select name="test_id">
+        {% for test in tests %}
+            <option value="{{ test.id }}">{{ test.title }}</option>
+        {% endfor %}
+    </select><br>
+    Студент: 
+    <select name="student_id">
+        {% for student in students %}
+            <option value="{{ student.id }}">{{ student.full_name }}</option>
+        {% endfor %}
+    </select><br>
+    <input type="submit" value="Назначить тест">
+</form>
+<a href="{{ url_for('main.dashboard') }}">Назад в кабинет</a>
+{% endblock %}
