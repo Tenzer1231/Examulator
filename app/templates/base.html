@@ -3,28 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}Система тестирования{% endblock %}</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <header>
-        <h1>Система тестирования</h1>
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            <ul class="flashes">
-              {% for message in messages %}
-                <li>{{ message }}</li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        {% endwith %}
-        <hr>
-    </header>
-    <main>
+
+    <!-- Меню навигации -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="{{ url_for('main.index') }}">🏠 Главная</a>
+            {% if current_user.is_authenticated %}
+                {% if current_user.student_id %}
+                    <a href="{{ url_for('main.student_tests') }}">📚 Мои тесты</a>
+                    <a href="{{ url_for('main.student_results') }}">📊 Результаты</a>
+                {% else %}
+                    <a href="{{ url_for('main.create_test') }}">➕ Создать тест</a>
+                    <a href="{{ url_for('main.assign_test') }}">👥 Назначить тест</a>
+                    <a href="{{ url_for('main.test_results') }}">📈 Результаты студентов</a>
+                {% endif %}
+                <a href="{{ url_for('auth.logout') }}">🚪 Выйти</a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}">🔑 Войти</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Контент страницы -->
+    <main class="container">
         {% block content %}{% endblock %}
     </main>
+
+    <!-- Футер -->
     <footer>
-        <hr>
         <p>&copy; 2025 Система тестирования</p>
     </footer>
+
 </body>
 </html>

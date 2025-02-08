@@ -1,31 +1,32 @@
-# app/__init__.py
 # -*- coding: utf-8 -*-
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from config import Config
-from flask_migrate import Migrate  # Если используете миграции
+from flask_migrate import Migrate
+from flask_login import LoginManager
 
 db = SQLAlchemy()
-
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
     db.init_app(app)
-    Migrate(app, db)  # Инициализация Flask-Migrate (опционально)
+    Migrate(app, db)  # Инициализация Flask-Migrate
 
     from app.views import bp as main_bp
-    app.register_blueprint(main_bp)
+    from app.auth import auth_bp  # 👈 Добавляем auth_bp
 
-    from flask_login import LoginManager
+    app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp, url_prefix='/auth')  # 👈 Теперь login – это /auth/login
+
     login_manager = LoginManager()
-    login_manager.login_view = 'main.login'
+    login_manager.login_view = 'auth.login'  # 👈 Исправляем здесь
     login_manager.init_app(app)
 
     @login_manager.user_loader
     def load_user(user_id):
-        # Ожидаем, что user_id имеет формат "student-<id>" или "teacher-<id>"
+        """ Загружает пользователя по ID """
         try:
             user_type, id_str = user_id.split('-', 1)
             uid = int(id_str)

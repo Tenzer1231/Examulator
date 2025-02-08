@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Оценка ответа{% endblock %}
+{% block content %}
+<h3>Оценка ответа</h3>
+
+<p><strong>Студент:</strong> {{ result.student.full_name }}</p>
+<p><strong>Вопрос:</strong> {{ result.question.text }}</p>
+<p><strong>Ответ:</strong> {{ result.answer_text if result.answer_text else 'Вариант ответа: ' + result.selected_option.option_text }}</p>
+
+<form method="post">
+    <label for="grade">Оценка:</label>
+    <input type="number" name="grade" min="0" max="10" required><br>
+
+    <label for="comment">Комментарий:</label><br>
+    <textarea name="comment"></textarea><br>
+
+    <input type="submit" value="Сохранить">
+</form>
+
+<a href="{{ url_for('main.test_results') }}">Назад</a>
+{% endblock %}

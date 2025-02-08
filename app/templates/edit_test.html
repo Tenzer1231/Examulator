@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Редактировать тест{% endblock %}
+{% block content %}
+<h3>Редактирование теста</h3>
+
+<form method="post">
+    <label>Название теста:</label>
+    <input type="text" name="title" value="{{ test.title }}"><br><br>
+
+    <label>Описание:</label>
+    <textarea name="description">{{ test.description }}</textarea><br><br>
+
+    <label>Продолжительность (в минутах):</label>
+    <input type="number" name="duration" value="{{ test.duration }}"><br><br>
+
+    <label>Режим теста:</label>
+    <select name="test_type">
+        <option value="choice" {% if test.test_type == 'choice' %}selected{% endif %}>С выбором ответа</option>
+        <option value="free_response" {% if test.test_type == 'free_response' %}selected{% endif %}>Свободный ответ</option>
+    </select><br><br>
+
+    <input type="submit" value="Сохранить изменения">
+</form>
+
+<a href="{{ url_for('main.dashboard') }}">Назад в кабинет</a>
+{% endblock %}

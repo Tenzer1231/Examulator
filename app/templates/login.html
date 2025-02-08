@@ -9,13 +9,19 @@
         <option value="teacher">Преподаватель</option>
     </select><br><br>
     <div id="student_fields">
-        Номер студенческого билета: <input type="text" name="student_id"><br>
+        <label for="student_id">Номер студенческого билета:</label>
+        <input type="text" name="student_id" id="student_id" class="input-field"><br>
     </div>
     <div id="teacher_fields" style="display:none;">
-        Логин: <input type="text" name="username"><br>
-        Пароль: <input type="password" name="password"><br>
+        <label for="username">Логин:</label>
+        <input type="text" name="username" id="username" class="input-field"><br>
+        <label for="password">Пароль:</label>
+        <div class="password-container">
+            <input type="password" name="password" id="password" class="input-field">
+            <span class="password-toggle" onclick="togglePassword()">👁️</span>
+        </div>
     </div>
-    <input type="submit" value="Войти">
+    <input type="submit" value="Войти" class="btn">
 </form>
 <script>
     const select = document.getElementById('user_type');
@@ -30,5 +36,14 @@
             teacherFields.style.display = 'block';
         }
     });
+
+    function togglePassword() {
+        var passwordField = document.getElementById("password");
+        if (passwordField.type === "password") {
+            passwordField.type = "text";
+        } else {
+            passwordField.type = "password";
+        }
+    }
 </script>
 {% endblock %}

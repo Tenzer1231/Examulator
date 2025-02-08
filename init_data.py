@@ -30,7 +30,8 @@ with app.app_context():
     db.session.commit()
 
     # Добавляем преподавателя
-    teacher1 = Teacher(full_name="Петр Петров", username="petr", password="secret")
+    teacher1 = Teacher(full_name="Петр Петров", username="petr")
+    teacher1.set_password("secret")  # Используем хеширование пароля
     db.session.add(teacher1)
     db.session.commit()
 

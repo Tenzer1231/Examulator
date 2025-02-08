@@ -1,12 +1,118 @@
-/* app/static/style.css */
+/* Общие стили */
 body {
     font-family: Arial, sans-serif;
-    margin: 20px;
+    margin: 0;
+    padding: 0;
+    background: #f4f4f4;
 }
-header, footer {
-    background-color: #f8f8f8;
+
+/* Контейнер для контента */
+.container {
+    max-width: 900px;
+    margin: auto;
+    padding: 15px;
+}
+
+/* Навигационное меню */
+.navbar {
+    background: #007bff;
+    padding: 10px 0;
+    text-align: center;
+}
+.navbar a {
+    color: white;
+    text-decoration: none;
+    padding: 10px 15px;
+    font-size: 16px;
+    display: inline-block;
+}
+.navbar a:hover {
+    background: #0056b3;
+    border-radius: 5px;
+}
+
+/* Карточки (для тестов, вопросов) */
+.card {
+    background: white;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+}
+.card h3 {
+    margin: 0;
+    font-size: 20px;
+    color: #333;
+}
+
+/* Кнопки */
+button, input[type="submit"] {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 14px;
+}
+button:hover, input[type="submit"]:hover {
+    background-color: #0056b3;
+}
+
+/* Формы */
+form {
+    background: white;
+    padding: 15px;
+    border-radius: 5px;
+    max-width: 500px;
+    margin: auto;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+}
+input[type="text"], input[type="number"], input[type="password"], select, textarea {
+    width: 100%;
     padding: 10px;
+    margin: 5px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
 }
-.flashes {
-    color: red;
+
+/* Специальный стиль для поля пароля */
+.password-container {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+.password-container input[type="password"] {
+    flex-grow: 1;
+    padding-right: 40px;
+}
+
+/* Кнопка для показа/скрытия пароля */
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+/* Футер */
+footer {
+    background: #f8f8f8;
+    text-align: center;
+    padding: 10px;
+    margin-top: 20px;
+}
+
+/* Адаптивность */
+@media (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+    .navbar a {
+        display: block;
+        padding: 10px;
+    }
 }

@@ -40,7 +40,13 @@ def login():
             if not username or not password:
                 flash('Введите логин и пароль')
                 return redirect(url_for('main.login'))
-            user = Teacher.query.filter_by(username=username, password=password).first()
+            user = Teacher.query.filter_by(username=username).first()
+            if user and user.check_password(password):  # Проверяем пароль через метод check_password()
+                login_user(user)
+            else:
+                flash('Неверный логин или пароль')
+                return redirect(url_for('auth.login'))
+
         if user:
             login_user(user)
             flash('Вы успешно вошли!')
@@ -499,3 +505,35 @@ def grade_test(test_id, student_id):
     test_obj = Test.query.get(test_id)
     student_obj = Student.query.get(student_id)
     return render_template("grade_test.html", test=test_obj, student=student_obj, q_results=q_results)
+
+
+# 08.02
+@bp.route('/teacher/edit_test/<int:test_id>', methods=['GET', 'POST'])
+@login_required
+def edit_test(test_id):
+    if not hasattr(current_user, 'username'):
+        flash("Только преподаватели могут редактировать тесты.")
+        return redirect(url_for('main.index'))
+
+    test = Test.query.get(test_id)
+    if not test:
+        flash("Тест не найден.")
+        return redirect(url_for('main.dashboard'))
+
+    if request.method == 'POST':
+        test.title = request.form.get('title')
+        test.description = request.form.get('description')
+        try:
+            test.duration = int(request.form.get('duration'))
+        except ValueError:
+            flash("Продолжительность должна быть числом.")
+            return redirect(url_for('main.edit_test', test_id=test_id))
+
+        test.test_type = request.form.get('test_type')
+
+        db.session.commit()
+        flash("Тест успешно обновлен!")
+        return redirect(url_for('main.dashboard'))
+
+    return render_template("edit_test.html", test=test)
+
