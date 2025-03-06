@@ -2,20 +2,72 @@
 {% block title %}Назначить тест{% endblock %}
 {% block content %}
 <h3>Назначение теста студенту</h3>
+
 <form method="post">
-    Тест: 
+    <label>Тест:</label>
     <select name="test_id">
         {% for test in tests %}
             <option value="{{ test.id }}">{{ test.title }}</option>
         {% endfor %}
-    </select><br>
-    Студент: 
-    <select name="student_id">
-        {% for student in students %}
-            <option value="{{ student.id }}">{{ student.full_name }}</option>
+    </select><br><br>
+
+    <label>Факультет:</label>
+    <select id="faculty_filter">
+        <option value="">Все факультеты</option>
+        {% for faculty in faculties %}
+            <option value="{{ faculty.id }}">{{ faculty.name }}</option>
         {% endfor %}
-    </select><br>
+    </select><br><br>
+
+    <label>Группа:</label>
+    <select id="group_filter">
+        <option value="">Все группы</option>
+        {% for group in groups %}
+            <option value="{{ group.id }}" data-faculty="{{ group.faculty_id }}">{{ group.name }}</option>
+        {% endfor %}
+    </select><br><br>
+
+    <label>Студент:</label>
+    <select name="student_id" id="student_filter">
+        {% for student in students %}
+            <option value="{{ student.id }}" data-group="{{ student.group_id }}">{{ student.full_name }}</option>
+        {% endfor %}
+    </select><br><br>
+
     <input type="submit" value="Назначить тест">
 </form>
+
 <a href="{{ url_for('main.dashboard') }}">Назад в кабинет</a>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const facultyFilter = document.getElementById("faculty_filter");
+    const groupFilter = document.getElementById("group_filter");
+    const studentFilter = document.getElementById("student_filter");
+
+    facultyFilter.addEventListener("change", function () {
+        const selectedFaculty = this.value;
+
+        // Фильтруем группы по факультету
+        Array.from(groupFilter.options).forEach(option => {
+            option.style.display = (selectedFaculty === "" || option.dataset.faculty === selectedFaculty) ? "block" : "none";
+        });
+
+        groupFilter.value = "";
+        studentFilter.value = "";
+    });
+
+    groupFilter.addEventListener("change", function () {
+        const selectedGroup = this.value;
+
+        // Фильтруем студентов по группе
+        Array.from(studentFilter.options).forEach(option => {
+            option.style.display = (selectedGroup === "" || option.dataset.group === selectedGroup) ? "block" : "none";
+        });
+
+        studentFilter.value = "";
+    });
+});
+</script>
+
 {% endblock %}

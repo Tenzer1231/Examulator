@@ -9,19 +9,20 @@ db = SQLAlchemy()
 
 def create_app():
     app = Flask(__name__)
+    app.config['JSON_AS_ASCII'] = False
     app.config.from_object(Config)
 
     db.init_app(app)
-    Migrate(app, db)  # Инициализация Flask-Migrate
+    Migrate(app, db)
 
     from app.views import bp as main_bp
-    from app.auth import auth_bp  # 👈 Добавляем auth_bp
+    from app.auth import auth_bp
 
     app.register_blueprint(main_bp)
-    app.register_blueprint(auth_bp, url_prefix='/auth')  # 👈 Теперь login – это /auth/login
+    app.register_blueprint(auth_bp, url_prefix='/auth')
 
     login_manager = LoginManager()
-    login_manager.login_view = 'auth.login'  # 👈 Исправляем здесь
+    login_manager.login_view = 'auth.login'
     login_manager.init_app(app)
 
     @login_manager.user_loader

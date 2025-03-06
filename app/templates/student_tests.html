@@ -5,11 +5,16 @@
 {% for assign in assignments %}
     <div>
         {% if assign.test.test_type == 'choice' and assign.test.questions|length == 1 %}
-            <a href="{{ url_for('main.take_test', test_id=assign.test.id) }}">{{ assign.test.title }}</a>
+            <a href="{{ url_for('main.start_test_multi', test_id=assign.test.id) }}">{{ assign.test.title }}</a>
         {% else %}
             <a href="{{ url_for('main.start_test_multi', test_id=assign.test.id) }}">{{ assign.test.title }}</a>
         {% endif %}
-        - Статус: {{ assign.status }}
+        - <strong>Статус:</strong>
+        {% if assign.status == 'taken' %}
+            ✅ Пройден
+        {% else %}
+            🕒 Ожидает прохождения
+        {% endif %}
     </div>
 {% endfor %}
 <a href="{{ url_for('main.dashboard') }}">Назад к кабинету</a>

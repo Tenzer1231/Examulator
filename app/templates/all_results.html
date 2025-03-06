@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Все результаты{% endblock %}
+{% block content %}
+
+<h2>Все результаты</h2>
+
+<!-- Фильтры по факультетам и группам -->
+<label>Факультет:</label>
+<select id="facultyFilter">
+    <option value="">Все факультеты</option>
+    {% for faculty in faculties %}
+        <option value="{{ faculty.id }}">{{ faculty.name }}</option>
+    {% endfor %}
+</select>
+
+<label>Группа:</label>
+<select id="groupFilter">
+    <option value="">Все группы</option>
+    {% for group in groups %}
+        <option value="{{ group.id }}" data-faculty="{{ group.faculty_id }}">{{ group.name }}</option>
+    {% endfor %}
+</select>
+
+<hr>
+
+<table border="1" cellpadding="5">
+    <thead>
+    <tr>
+        <th>Факультет</th>
+        <th>Группа</th>
+        <th>Студент</th>
+        <th>Тест</th>
+        <th>Вопрос</th>
+        <th>Ответ студента</th>
+        <th>Оценка</th>
+        <th>Комментарий</th>
+    </tr>
+    </thead>
+    <tbody id="resultsBody">
+
+    <!-- Блок: одновопросные тесты (TestResult) -->
+    {% for sr, student, group, test in single_results %}
+    <tr class="result-row"
+        data-faculty="{{ group.faculty_id }}"
+        data-group="{{ group.id }}">
+        <td>{{ group.faculty.name }}</td>
+        <td>{{ group.name }}</td>
+        <td>{{ student.full_name }}</td>
+        <td>{{ test.title }}</td>
+        <td>— (один вопрос)</td>
+        <td>
+            {% if sr.answer_text %}
+                {{ sr.answer_text }}
+            {% elif sr.selected_option %}
+                {{ sr.selected_option.option_text }}
+            {% else %}
+                —
+            {% endif %}
+        </td>
+        <td>{{ sr.grade if sr.grade else "Не оценено" }}</td>
+        <td>{{ sr.comments if sr.comments else "—" }}</td>
+    </tr>
+    {% endfor %}
+
+    <!-- Блок: многостраничные тесты (QuestionResult) -->
+    {% for qr, student, group, test, question in multi_results %}
+    <tr class="result-row"
+        data-faculty="{{ group.faculty_id }}"
+        data-group="{{ group.id }}">
+        <td>{{ group.faculty.name }}</td>
+        <td>{{ group.name }}</td>
+        <td>{{ student.full_name }}</td>
+        <td>{{ test.title }}</td>
+        <td>{{ question.text }}</td>
+        <td>
+            {% if qr.answer_text %}
+                {{ qr.answer_text }}
+            {% elif qr.selected_option %}
+                {{ qr.selected_option.option_text }}
+            {% else %}
+                —
+            {% endif %}
+        </td>
+        <td>{{ qr.grade if qr.grade else "Не оценено" }}</td>
+        <td>{{ qr.comments if qr.comments else "—" }}</td>
+    </tr>
+    {% endfor %}
+
+    </tbody>
+</table>
+
+<script>
+    const facultyFilter = document.getElementById('facultyFilter');
+    const groupFilter = document.getElementById('groupFilter');
+    const rows = document.querySelectorAll('.result-row');
+
+    function filterResults() {
+        const selectedFaculty = facultyFilter.value;
+        const selectedGroup = groupFilter.value;
+        rows.forEach(row => {
+            const rowFaculty = row.dataset.faculty;
+            const rowGroup = row.dataset.group;
+            // Условие: если факультет не выбран или совпадает, и группа не выбрана или совпадает
+            if ((selectedFaculty === "" || rowFaculty === selectedFaculty) &&
+                (selectedGroup === "" || rowGroup === selectedGroup)) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        });
+    }
+
+    facultyFilter.addEventListener('change', filterResults);
+    groupFilter.addEventListener('change', filterResults);
+</script>
+
+{% endblock %}

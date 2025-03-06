@@ -10,8 +10,8 @@ from flask_login import login_required, current_user, login_user, logout_user
 from werkzeug.utils import secure_filename
 from app import db
 from app.models import (
-    Student, Teacher, Subject, Test, TestOption, TestAssignment, TestResult,
-    Question, QuestionOption, QuestionResult
+    Teacher, Subject, TestOption, TestResult,
+    Question, QuestionOption, QuestionResult, Faculty, Group, Student, Test, TestAssignment
 )
 
 bp = Blueprint('main', __name__)
@@ -23,7 +23,6 @@ bp = Blueprint('main', __name__)
 @bp.route('/')
 def index():
     return render_template("index.html")
-
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -41,7 +40,7 @@ def login():
                 flash('Введите логин и пароль')
                 return redirect(url_for('main.login'))
             user = Teacher.query.filter_by(username=username).first()
-            if user and user.check_password(password):  # Проверяем пароль через метод check_password()
+            if user and user.check_password(password):
                 login_user(user)
             else:
                 flash('Неверный логин или пароль')
@@ -69,8 +68,7 @@ def dashboard():
     if hasattr(current_user, 'username'):
         tests = Test.query.all()
         return render_template("dashboard.html", tests=tests)
-    else:
-        return render_template("dashboard.html")
+    return render_template("dashboard.html")
 
 #################################
 # Функционал преподавателя
@@ -161,12 +159,14 @@ def add_questions(test_id):
     questions = test.questions
     return render_template("add_questions.html", test=test, questions=questions)
 
+
 @bp.route('/teacher/assign_test', methods=['GET', 'POST'])
 @login_required
 def assign_test():
     if not hasattr(current_user, 'username'):
         flash("Только преподаватели могут назначать тесты.")
         return redirect(url_for('main.index'))
+
     if request.method == 'POST':
         test_id = request.form.get('test_id')
         student_id = request.form.get('student_id')
@@ -182,9 +182,13 @@ def assign_test():
         db.session.commit()
         flash("Тест успешно назначен!")
         return redirect(url_for('main.dashboard'))
+
     tests = Test.query.all()
     students = Student.query.all()
-    return render_template("assign_test.html", tests=tests, students=students)
+    faculties = Faculty.query.all()
+    groups = Group.query.all()
+
+    return render_template("assign_test.html", tests=tests, students=students, faculties=faculties, groups=groups)
 
 
 @bp.route('/teacher/test_results')
@@ -193,18 +197,23 @@ def test_results():
     if not hasattr(current_user, 'username'):
         flash("Доступ разрешён только для преподавателей.")
         return redirect(url_for('main.index'))
+
     test_results = TestResult.query.all()
+
     multi_results_query = db.session.query(
         Question.test_id,
         Test.title.label("test_title"),
         QuestionResult.student_id,
         Student.full_name.label("student_name"),
-        db.func.min(QuestionResult.grade).label("overall_grade"),
+        Student.group_id.label("group_id"),
+        Group.faculty_id.label("faculty_id"),
+        db.func.avg(QuestionResult.grade).label("overall_grade"),
         db.func.group_concat(QuestionResult.comments, '; ').label("overall_comment")
     ).join(Question, Question.id == QuestionResult.question_id
            ).join(Test, Test.id == Question.test_id
                   ).join(Student, Student.id == QuestionResult.student_id
-                         ).group_by(Question.test_id, QuestionResult.student_id).all()
+                         ).join(Group, Group.id == Student.group_id
+                                ).group_by(Question.test_id, QuestionResult.student_id).all()
 
     multi_results = []
     for r in multi_results_query:
@@ -213,12 +222,20 @@ def test_results():
             'test_title': r.test_title,
             'student_id': r.student_id,
             'student_name': r.student_name,
-            'overall_grade': r.overall_grade,
-            'overall_comment': r.overall_comment
+            'group_id': r.group_id,
+            'faculty_id': r.faculty_id,
+            'overall_grade': r.overall_grade if r.overall_grade else "Не оценено",
+            'overall_comment': r.overall_comment if r.overall_comment else "Нет комментариев"
         })
 
-    return render_template("test_results.html", test_results=test_results, multi_results=multi_results)
+    faculties = Faculty.query.all()
+    groups = Group.query.all()
 
+    return render_template("test_results.html",
+                           test_results=test_results,
+                           multi_results=multi_results,
+                           faculties=faculties,
+                           groups=groups)
 
 @bp.route('/teacher/grade_result/<int:result_id>', methods=['GET', 'POST'])
 @login_required
@@ -257,54 +274,6 @@ def student_tests():
         return redirect(url_for('main.index'))
     assignments = TestAssignment.query.filter_by(student_id=current_user.id).all()
     return render_template("student_tests.html", assignments=assignments)
-
-# Маршрут для прохождения теста в старом режиме (один вопрос)
-@bp.route('/student/take_test/<int:test_id>', methods=['GET', 'POST'])
-@login_required
-def take_test(test_id):
-    if not hasattr(current_user, 'student_id'):
-        flash("Доступ разрешён только для студентов.")
-        return redirect(url_for('main.index'))
-    assignment = TestAssignment.query.filter_by(test_id=test_id, student_id=current_user.id).first()
-    if not assignment:
-        flash("Тест не назначен для вас.")
-        return redirect(url_for('main.student_tests'))
-    if assignment.status == 'taken':
-        flash("Вы уже прошли этот тест.")
-        return redirect(url_for('main.student_tests'))
-    test = Test.query.get(test_id)
-    if test.test_type != 'choice':
-        flash("Этот тест предназначен для режима свободного ответа. Перейдите на многостраничный режим.")
-        return redirect(url_for('main.student_tests'))
-    options = TestOption.query.filter_by(test_id=test_id).all()
-    if request.method == 'POST':
-        uploaded_file = request.files.get('uploaded_file')
-        file_path = None
-        if uploaded_file and uploaded_file.filename != "":
-            filename = secure_filename(uploaded_file.filename)
-            upload_folder = current_app.config.get('UPLOAD_FOLDER')
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
-            file_path = os.path.join(upload_folder, filename)
-            uploaded_file.save(file_path)
-            file_path = filename
-        selected_option = request.form.get('selected_option')
-        if not selected_option:
-            flash("Выберите вариант ответа.")
-            return redirect(url_for('main.take_test', test_id=test_id))
-        result = TestResult(
-            test_id=test_id,
-            student_id=current_user.id,
-            selected_option_id=int(selected_option),
-            file_path=file_path,
-            grade=None
-        )
-        assignment.status = 'taken'
-        db.session.add(result)
-        db.session.commit()
-        flash("Тест отправлен! Преподаватель оценит ваш ответ позже.")
-        return redirect(url_for('main.student_tests'))
-    return render_template("take_test.html", test=test, options=options)
 
 @bp.route('/student/take_test_multi/<int:test_id>/start', methods=['GET'])
 @login_required
@@ -408,6 +377,7 @@ def take_test_multi(test_id, question_index):
                         if 'file_path' in ans:
                             q_result.file_path = ans['file_path']
                         db.session.add(q_result)
+
                 else:
                     if ans and 'answer_text' in ans:
                         q_result = QuestionResult(
@@ -419,6 +389,15 @@ def take_test_multi(test_id, question_index):
                         if 'file_path' in ans:
                             q_result.file_path = ans['file_path']
                         db.session.add(q_result)
+
+            test_result = TestResult(
+                test_id=test.id,
+                student_id=current_user.id,
+                grade=None,
+                comments=""
+            )
+            db.session.add(test_result)
+
             assignment.status = 'taken'
             db.session.commit()
             flash("Тест отправлен!")
@@ -506,8 +485,6 @@ def grade_test(test_id, student_id):
     student_obj = Student.query.get(student_id)
     return render_template("grade_test.html", test=test_obj, student=student_obj, q_results=q_results)
 
-
-# 08.02
 @bp.route('/teacher/edit_test/<int:test_id>', methods=['GET', 'POST'])
 @login_required
 def edit_test(test_id):
@@ -537,3 +514,136 @@ def edit_test(test_id):
 
     return render_template("edit_test.html", test=test)
 
+from flask import jsonify
+
+
+@bp.route('/teacher/get_test_result/<int:result_id>', methods=['GET'])
+@login_required
+def get_test_result(result_id):
+    """ API для получения информации о тесте и ответах студента """
+    if not hasattr(current_user, 'username'):
+        return jsonify({'error': 'Доступ разрешён только для преподавателей'}), 403
+
+    result = TestResult.query.get(result_id)
+    if not result:
+        return jsonify({'error': 'Результат не найден'}), 404
+
+    test_data = {
+        "test_title": result.test.title,
+        "grade": result.grade,
+        "comments": result.comments,
+        "answers": []
+    }
+
+    question_results = QuestionResult.query.join(Question).filter(
+        QuestionResult.student_id == result.student_id,
+        Question.test_id == result.test_id
+    ).all()
+
+    print(f"Запрос к базе: найдено {len(question_results)} ответов")
+
+    for q_res in question_results:
+        test_data["answers"].append({
+            "question_text": q_res.question.text,
+            "answer_text": q_res.answer_text,
+            "file_path": q_res.file_path
+        })
+
+    print("Ответ API:", test_data)
+
+    return jsonify(test_data)
+
+
+@bp.route('/teacher/grade_result/<int:result_id>', methods=['POST'])
+@login_required
+def update_test_result(result_id):
+    """ API для обновления оценки и комментария """
+    if not hasattr(current_user, 'username'):
+        return jsonify({'error': 'Доступ разрешён только для преподавателей'}), 403
+
+    result = TestResult.query.get(result_id)
+    if not result:
+        return jsonify({'error': 'Результат не найден'}), 404
+
+    data = request.get_json()
+    try:
+        result.grade = int(data.get('grade'))
+        result.comments = data.get('comment', "")
+        db.session.commit()
+        return jsonify({'message': 'Оценка обновлена успешно'})
+    except ValueError:
+        return jsonify({'error': 'Оценка должна быть числом'}), 400
+
+@bp.route('/teacher/update_grade', methods=['POST'])
+@login_required
+def update_grade():
+    """Обновляет оценку и комментарий студента по тесту."""
+    if not hasattr(current_user, 'username'):
+        return {"error": "Доступ запрещён"}, 403
+
+    data = request.get_json()
+    result_id = data.get("result_id")
+    new_grade = data.get("grade")
+    comment = data.get("comment")
+
+    if not result_id or new_grade is None:
+        return {"error": "Некорректные данные"}, 400
+
+    result = TestResult.query.get(result_id)
+    if not result:
+        return {"error": "Результат не найден"}, 404
+
+    try:
+        new_grade = int(new_grade)
+        if not (1 <= new_grade <= 10):
+            return {"error": "Оценка должна быть в диапазоне 1-10"}, 400
+    except ValueError:
+        return {"error": "Оценка должна быть числом"}, 400
+
+    result.grade = new_grade
+    result.comments = comment
+    db.session.commit()
+
+    return {"message": "Оценка обновлена", "grade": new_grade, "comment": comment}
+
+@bp.route('/teacher/all_results')
+@login_required
+def all_results():
+    if not hasattr(current_user, 'username'):
+        flash("Доступ разрешён только для преподавателей.")
+        return redirect(url_for('main.index'))
+
+    # 1) Выбираем «одновопросные» результаты из TestResult
+    #    (где поле selected_option_id или answer_text реально используется)
+    #    При этом подтягиваем данные о студенте, группе и самом тесте.
+    single_results = (
+        db.session.query(TestResult, Student, Group, Test)
+        .join(Student, TestResult.student_id == Student.id)
+        .join(Group, Student.group_id == Group.id)
+        .join(Test, Test.id == TestResult.test_id)
+        .all()
+    )
+
+    # 2) Выбираем «многостраничные» результаты из QuestionResult
+    #    чтобы увидеть все ответы на каждый вопрос. Подтягиваем
+    #    данные о студенте, группе, тесте и самом вопросе.
+    multi_results = (
+        db.session.query(QuestionResult, Student, Group, Test, Question)
+        .join(Student, QuestionResult.student_id == Student.id)
+        .join(Question, Question.id == QuestionResult.question_id)
+        .join(Test, Test.id == Question.test_id)
+        .join(Group, Student.group_id == Group.id)
+        .all()
+    )
+
+    # Списки факультетов и групп для фильтра
+    faculties = Faculty.query.all()
+    groups = Group.query.all()
+
+    return render_template(
+        "all_results.html",
+        single_results=single_results,
+        multi_results=multi_results,
+        faculties=faculties,
+        groups=groups
+    )

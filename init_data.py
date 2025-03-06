@@ -1,9 +1,9 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Этот скрипт заполняет базу данных начальными данными:
 - Добавляет предметы (Subject)
 - Добавляет преподавателя с базовыми логином и паролем
+- Добавляет факультеты и группы
 - Добавляет студентов с базовыми данными
 - Добавляет тест с режимом (choice/free_response)
 - Добавляет несколько вопросов к тесту с вариантами ответа
@@ -13,13 +13,12 @@
 from app import create_app, db
 from app.models import (
     Student, Teacher, Subject, Test, TestAssignment,
-    Question, QuestionOption
+    Question, QuestionOption, Faculty, Group
 )
 
 app = create_app()
 
 with app.app_context():
-    # Для чистого старта (удалите старую базу, если она есть)
     db.drop_all()
     db.create_all()
 
@@ -31,62 +30,69 @@ with app.app_context():
 
     # Добавляем преподавателя
     teacher1 = Teacher(full_name="Петр Петров", username="petr")
-    teacher1.set_password("secret")  # Используем хеширование пароля
+    teacher1.set_password("secret")
     db.session.add(teacher1)
     db.session.commit()
 
-    # Добавляем студентов
-    student1 = Student(full_name="Иван Иванов", group="101", student_id="123456")
-    student2 = Student(full_name="Сергей Сергеев", group="102", student_id="654321")
-    db.session.add_all([student1, student2])
+    faculty_rpo = Faculty(name="Разработка ПО")
+    faculty_design = Faculty(name="Дизайн")
+    db.session.add_all([faculty_rpo, faculty_design])
     db.session.commit()
 
-    # Добавляем тест для предмета "Программирование"
-    # Устанавливаем режим теста "choice" (с выбором ответа); если нужен свободный ответ, укажите "free_response"
+    groups = []
+    for faculty in [faculty_rpo, faculty_design]:
+        for course in range(1, 5):
+            group = Group(name=f"{faculty.name} {course} курс", course=course, faculty_id=faculty.id)
+            groups.append(group)
+
+    db.session.add_all(groups)
+    db.session.commit()
+
+    students = [
+        Student(full_name="Иван Иванов", student_id="123456", group_id=groups[0].id),
+        Student(full_name="Сергей Сергеев", student_id="654321", group_id=groups[1].id),
+        Student(full_name="Анна Смирнова", student_id="789012", group_id=groups[2].id),
+        Student(full_name="Ольга Петрова", student_id="345678", group_id=groups[3].id)
+    ]
+
+    db.session.add_all(students)
+    db.session.commit()
+
+    # -------------------------------
+    # Новая часть для создания теста, вопросов и назначения
+    # -------------------------------
+
     test1 = Test(
         subject_id=subject1.id,
-        title="Основы Python",
-        description="Ответьте на следующие вопросы по основам Python.",
-        duration=10,  # продолжительность теста в минутах
+        title="Основы программирования",
+        description="Тест на проверку базовых знаний программирования",
+        duration=30,
         test_type="choice"
     )
     db.session.add(test1)
     db.session.commit()
 
-    # Добавляем первый вопрос в тест
-    question1 = Question(
-        test_id=test1.id,
-        text="Какой из вариантов соответствует объявлению переменной в Python?",
-        image_path=None
-    )
+    question1 = Question(test_id=test1.id, text="Какой оператор используется для вывода в Python?")
     db.session.add(question1)
     db.session.commit()
 
-    # Добавляем варианты ответов для первого вопроса
-    q1_opt1 = QuestionOption(question_id=question1.id, option_text="var a = 10;", is_correct=False)
-    q1_opt2 = QuestionOption(question_id=question1.id, option_text="a = 10", is_correct=True)
-    q1_opt3 = QuestionOption(question_id=question1.id, option_text="int a = 10;", is_correct=False)
-    db.session.add_all([q1_opt1, q1_opt2, q1_opt3])
+    option1_q1 = QuestionOption(question_id=question1.id, option_text="print()", is_correct=True)
+    option2_q1 = QuestionOption(question_id=question1.id, option_text="echo", is_correct=False)
+    option3_q1 = QuestionOption(question_id=question1.id, option_text="printf", is_correct=False)
+    db.session.add_all([option1_q1, option2_q1, option3_q1])
     db.session.commit()
 
-    # Добавляем второй вопрос в тест (продолжаем создавать вопросы "непрерывно")
-    question2 = Question(
-        test_id=test1.id,
-        text="Что выведет следующий код: print(2 + 2)?",
-        image_path=None
-    )
+    question2 = Question(test_id=test1.id, text="Какой из следующих вариантов обозначает комментарий в Python?")
     db.session.add(question2)
     db.session.commit()
 
-    # Добавляем варианты ответов для второго вопроса
-    q2_opt1 = QuestionOption(question_id=question2.id, option_text="22", is_correct=False)
-    q2_opt2 = QuestionOption(question_id=question2.id, option_text="4", is_correct=True)
-    q2_opt3 = QuestionOption(question_id=question2.id, option_text="2 + 2", is_correct=False)
-    db.session.add_all([q2_opt1, q2_opt2, q2_opt3])
+    option1_q2 = QuestionOption(question_id=question2.id, option_text="# Комментарий", is_correct=True)
+    option2_q2 = QuestionOption(question_id=question2.id, option_text="// Комментарий", is_correct=False)
+    option3_q2 = QuestionOption(question_id=question2.id, option_text="/* Комментарий */", is_correct=False)
+    db.session.add_all([option1_q2, option2_q2, option3_q2])
     db.session.commit()
 
-    # (Опционально) Назначаем тест студенту
-    assignment1 = TestAssignment(test_id=test1.id, student_id=student1.id, status='not_taken')
+    assignment1 = TestAssignment(test_id=test1.id, student_id=students[0].id, status='not_taken')
     db.session.add(assignment1)
     db.session.commit()
 
